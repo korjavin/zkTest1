@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/consensys/gnark"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -76,8 +77,22 @@ func generateProof(w http.ResponseWriter, r *http.Request) {
 	circuit.Balance = balance
 	circuit.NeededAmount = req.NeededAmount
 
-	// Generate proof
-	proof, err := gnark.NewProver(circuit)
+	// Compile the circuit
+	r1cs, err := frontend.Compile(gnark.Curve(), frontend.NewBuilder, &circuit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate the proving and verifying keys
+	pk, vk, err := groth16.Setup(r1cs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate the proof
+	proof, err := groth16.Prove(r1cs, pk, &circuit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -107,8 +122,22 @@ func validateProof(w http.ResponseWriter, r *http.Request) {
 	var circuit BalanceCircuit
 	circuit.Balance = balance
 
-	// Verify proof
-	valid, err := gnark.NewVerifier(circuit, req.Proof)
+	// Compile the circuit
+	r1cs, err := frontend.Compile(gnark.Curve(), frontend.NewBuilder, &circuit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate the proving and verifying keys
+	_, vk, err := groth16.Setup(r1cs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Verify the proof
+	valid, err := groth16.Verify(req.Proof, vk, &circuit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
