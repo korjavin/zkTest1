@@ -12,7 +12,7 @@ import (
 func TestBalanceCircuit_Compilation(t *testing.T) {
 	// Test that the circuit compiles successfully
 	circuit := &BalanceCircuit{}
-	
+
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, circuit)
 	if err != nil {
 		t.Errorf("Circuit compilation failed: %v", err)
@@ -23,7 +23,7 @@ func TestBalanceCircuit_Compilation(t *testing.T) {
 	if ccs == nil {
 		t.Error("Expected compiled circuit, got nil")
 	}
-	
+
 	// Test setup works
 	_, _, err = groth16.Setup(ccs)
 	if err != nil {
@@ -34,7 +34,7 @@ func TestBalanceCircuit_Compilation(t *testing.T) {
 func TestBalanceCircuit_CompileAndSetup(t *testing.T) {
 	// Test that the circuit compiles successfully
 	circuit := &BalanceCircuit{}
-	
+
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, circuit)
 	if err != nil {
 		t.Fatalf("Failed to compile circuit: %v", err)

@@ -38,7 +38,7 @@ func (h *TestHelper) StoreBalance(userID string, amount int) *httptest.ResponseR
 		ID:     userID,
 		Amount: amount,
 	}
-	
+
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		h.t.Fatalf("Failed to marshal store request: %v", err)
@@ -125,7 +125,7 @@ func (h *TestHelper) ValidateProof(userID string, neededAmount int, proof groth1
 // CreateCircuitAndSetup creates and compiles a circuit with setup
 func (h *TestHelper) CreateCircuitAndSetup() (constraint.ConstraintSystem, groth16.ProvingKey, groth16.VerifyingKey) {
 	circuit := &BalanceCircuit{}
-	
+
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, circuit)
 	if err != nil {
 		h.t.Fatalf("Failed to compile circuit: %v", err)
@@ -166,7 +166,7 @@ func (h *TestHelper) VerifyTestProof(proof groth16.Proof, vk groth16.VerifyingKe
 	publicWitness := BalanceCircuit{
 		NeededAmount: neededAmount,
 	}
-	
+
 	witness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
 		h.t.Fatalf("Failed to create public witness: %v", err)
@@ -202,7 +202,7 @@ func (h *TestHelper) AssertBalanceStored(userID string, expectedAmount int) {
 // CreateTestScenario creates a complete test scenario with multiple users and balances
 func (h *TestHelper) CreateTestScenario() map[string]int {
 	h.SetupCleanBalances()
-	
+
 	scenario := map[string]int{
 		"alice":   200,
 		"bob":     100,

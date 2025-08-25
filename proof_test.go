@@ -11,27 +11,27 @@ import (
 
 func TestProofGeneration(t *testing.T) {
 	tests := []struct {
-		name         string
-		balance      int
-		neededAmount int
+		name          string
+		balance       int
+		neededAmount  int
 		shouldSucceed bool
 	}{
 		{
-			name:         "Valid proof - sufficient balance",
-			balance:      150,
-			neededAmount: 100,
+			name:          "Valid proof - sufficient balance",
+			balance:       150,
+			neededAmount:  100,
 			shouldSucceed: true,
 		},
 		{
-			name:         "Valid proof - exact balance",
-			balance:      100,
-			neededAmount: 100,
+			name:          "Valid proof - exact balance",
+			balance:       100,
+			neededAmount:  100,
 			shouldSucceed: true,
 		},
 		{
-			name:         "Invalid proof - insufficient balance",
-			balance:      50,
-			neededAmount: 100,
+			name:          "Invalid proof - insufficient balance",
+			balance:       50,
+			neededAmount:  100,
 			shouldSucceed: false,
 		},
 	}
@@ -63,7 +63,7 @@ func TestProofGeneration(t *testing.T) {
 
 			// Generate proof
 			proof, err := groth16.Prove(ccs, pk, witness)
-			
+
 			if tt.shouldSucceed {
 				if err != nil {
 					t.Errorf("Expected proof generation to succeed, but got error: %v", err)
@@ -74,7 +74,7 @@ func TestProofGeneration(t *testing.T) {
 				publicWitness := BalanceCircuit{
 					NeededAmount: tt.neededAmount,
 				}
-				
+
 				pubWitness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 				if err != nil {
 					t.Fatalf("Failed to create public witness: %v", err)
@@ -128,7 +128,7 @@ func TestProofVerification(t *testing.T) {
 		publicWitness := BalanceCircuit{
 			NeededAmount: neededAmount,
 		}
-		
+
 		pubWitness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 		if err != nil {
 			t.Fatalf("Failed to create public witness: %v", err)
@@ -144,7 +144,7 @@ func TestProofVerification(t *testing.T) {
 		wrongPublicWitness := BalanceCircuit{
 			NeededAmount: neededAmount + 100, // Different needed amount
 		}
-		
+
 		pubWitness, err := frontend.NewWitness(&wrongPublicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 		if err != nil {
 			t.Fatalf("Failed to create public witness: %v", err)
@@ -219,7 +219,7 @@ func BenchmarkProofVerification(b *testing.B) {
 	publicWitness := BalanceCircuit{
 		NeededAmount: 100,
 	}
-	
+
 	pubWitness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
 		b.Fatalf("Failed to create public witness: %v", err)

@@ -263,11 +263,11 @@ func BenchmarkStoreBalance(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		req, _ := http.NewRequest("POST", "/store/sum", bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handler := http.HandlerFunc(storeBalance)
 		handler.ServeHTTP(rr, req)
-		
+
 		if rr.Code != http.StatusOK {
 			b.Fatalf("Expected status OK, got %d", rr.Code)
 		}

@@ -141,7 +141,7 @@ func validateProof(w http.ResponseWriter, r *http.Request) {
 	publicWitness := BalanceCircuit{
 		NeededAmount: req.NeededAmount,
 	}
-	
+
 	witness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -211,7 +211,7 @@ func main() {
 	fmt.Println("🌐 Demo Frontend: http://localhost:8080")
 	fmt.Println("📖 API Documentation: http://localhost:8080/#api")
 	fmt.Println("🚀 Ready for zero-knowledge proof demonstrations!")
-	
+
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      nil,

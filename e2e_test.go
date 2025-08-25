@@ -210,7 +210,7 @@ func TestEdgeCases(t *testing.T) {
 
 			// Generate proof
 			proofResp, proof := generateProofE2E(t, tc.userID, tc.neededAmount)
-			
+
 			if tc.expectError {
 				if proofResp.Code == http.StatusOK {
 					t.Errorf("Expected proof generation to fail, but it succeeded")
@@ -238,7 +238,7 @@ func storeBalanceE2E(t *testing.T, userID string, amount int) *httptest.Response
 		ID:     userID,
 		Amount: amount,
 	}
-	
+
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		t.Fatalf("Failed to marshal store request: %v", err)
@@ -332,10 +332,10 @@ func BenchmarkEndToEndWorkflow(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		userID := fmt.Sprintf("benchmark_user_%d", i)
-		
+
 		// Store balance (not timed)
 		storeBalanceE2E_benchmark(userID, 200)
-		
+
 		b.StartTimer()
 		// Time the proof generation and validation
 		_, proof := generateProofE2E_benchmark(userID, 150)
@@ -349,7 +349,7 @@ func storeBalanceE2E_benchmark(userID string, amount int) {
 		ID:     userID,
 		Amount: amount,
 	}
-	
+
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/store/sum", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
