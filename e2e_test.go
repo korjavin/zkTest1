@@ -290,10 +290,16 @@ func generateProofE2E(t *testing.T, userID string, neededAmount int) (*httptest.
 }
 
 func validateProofE2E(t *testing.T, userID string, neededAmount int, proof groth16.Proof) *httptest.ResponseRecorder {
+	// Marshal proof to JSON first
+	proofJSON, err := json.Marshal(proof)
+	if err != nil {
+		t.Fatalf("Failed to marshal proof: %v", err)
+	}
+
 	reqBody := ValidateRequest{
 		ID:           userID,
 		NeededAmount: neededAmount,
-		Proof:        proof,
+		Proof:        json.RawMessage(proofJSON),
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -376,10 +382,13 @@ func generateProofE2E_benchmark(userID string, neededAmount int) (*httptest.Resp
 }
 
 func validateProofE2E_benchmark(userID string, neededAmount int, proof groth16.Proof) *httptest.ResponseRecorder {
+	// Marshal proof to JSON first
+	proofJSON, _ := json.Marshal(proof)
+
 	reqBody := ValidateRequest{
 		ID:           userID,
 		NeededAmount: neededAmount,
-		Proof:        proof,
+		Proof:        json.RawMessage(proofJSON),
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)

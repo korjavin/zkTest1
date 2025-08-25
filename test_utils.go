@@ -92,10 +92,16 @@ func (h *TestHelper) GenerateProof(userID string, neededAmount int) (*httptest.R
 
 // ValidateProof validates a proof via HTTP API
 func (h *TestHelper) ValidateProof(userID string, neededAmount int, proof groth16.Proof) *httptest.ResponseRecorder {
+	// Marshal proof to JSON first
+	proofJSON, err := json.Marshal(proof)
+	if err != nil {
+		h.t.Fatalf("Failed to marshal proof: %v", err)
+	}
+
 	reqBody := ValidateRequest{
 		ID:           userID,
 		NeededAmount: neededAmount,
-		Proof:        proof,
+		Proof:        json.RawMessage(proofJSON),
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
