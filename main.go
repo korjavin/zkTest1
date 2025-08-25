@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -108,7 +110,10 @@ func generateProof(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(proof)
+	if err := json.NewEncoder(w).Encode(proof); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func validateProof(w http.ResponseWriter, r *http.Request) {
@@ -192,11 +197,13 @@ func main() {
 	http.HandleFunc("/health", enableCORS(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"status":  "ok",
 			"service": "zkTest1 - Zero-Knowledge Proof Demo",
 			"version": "1.0.0",
-		})
+		}); err != nil {
+			log.Printf("Failed to encode health check response: %v", err)
+		}
 	}))
 
 	fmt.Println("🔐 zkTest1 Zero-Knowledge Proof Demo Server")
@@ -205,7 +212,15 @@ func main() {
 	fmt.Println("📖 API Documentation: http://localhost:8080/#api")
 	fmt.Println("🚀 Ready for zero-knowledge proof demonstrations!")
 	
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      nil,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		fmt.Println("❌ Failed to start server:", err)
 	}
 }
