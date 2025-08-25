@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/consensys/gnark"
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
 // Define the circuit
 type BalanceCircuit struct {
-	Balance      frontend.Variable `gnark:",public"`
+	Balance      frontend.Variable `gnark:",private"`
 	NeededAmount frontend.Variable `gnark:",public"`
 }
 
@@ -38,8 +39,9 @@ type ProofRequest struct {
 }
 
 type ValidateRequest struct {
-	ID    string `json:"id"`
-	Proof []byte `json:"proof"`
+	ID           string                `json:"id"`
+	NeededAmount int                   `json:"neededAmount"`
+	Proof        groth16.Proof         `json:"proof"`
 }
 
 func storeBalance(w http.ResponseWriter, r *http.Request) {
@@ -78,21 +80,28 @@ func generateProof(w http.ResponseWriter, r *http.Request) {
 	circuit.NeededAmount = req.NeededAmount
 
 	// Compile the circuit
-	r1cs, err := frontend.Compile(gnark.Curve(), frontend.NewBuilder, &circuit)
+	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &BalanceCircuit{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Generate the proving and verifying keys
-	pk, vk, err := groth16.Setup(r1cs)
+	pk, _, err := groth16.Setup(ccs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Create witness
+	witness, err := frontend.NewWitness(&circuit, ecc.BN254.ScalarField())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Generate the proof
-	proof, err := groth16.Prove(r1cs, pk, &circuit)
+	proof, err := groth16.Prove(ccs, pk, witness)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,41 +118,34 @@ func validateProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balancesMu.Lock()
-	balance, exists := balances[req.ID]
-	balancesMu.Unlock()
-
-	if !exists {
-		http.Error(w, "balance not found", http.StatusNotFound)
-		return
-	}
-
-	// Create a circuit
-	var circuit BalanceCircuit
-	circuit.Balance = balance
-
-	// Compile the circuit
-	r1cs, err := frontend.Compile(gnark.Curve(), frontend.NewBuilder, &circuit)
+	// Compile the circuit (we need this to get the verifying key)
+	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &BalanceCircuit{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Generate the proving and verifying keys
-	_, vk, err := groth16.Setup(r1cs)
+	_, vk, err := groth16.Setup(ccs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Create public witness (only the public inputs)
+	publicWitness := BalanceCircuit{
+		NeededAmount: req.NeededAmount,
+	}
+	
+	witness, err := frontend.NewWitness(&publicWitness, ecc.BN254.ScalarField(), frontend.PublicOnly())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Verify the proof
-	valid, err := groth16.Verify(req.Proof, vk, &circuit)
+	err = groth16.Verify(req.Proof, vk, witness)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if !valid {
 		http.Error(w, "invalid proof", http.StatusUnauthorized)
 		return
 	}

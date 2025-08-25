@@ -13,9 +13,7 @@ This project implements a privacy-preserving balance verification system using z
 ## 🛠️ Technology Stack
 
 - **Go 1.23.4** - Backend language
-- **Gin** - HTTP web framework
-- **GORM** - ORM for database operations
-- **SQLite** - Database for user storage
+- **net/http** - Standard HTTP server
 - **Gnark** - Zero-knowledge proof framework by ConsenSys
 - **Groth16** - zk-SNARK proving system
 
@@ -61,79 +59,84 @@ The server will start on `http://localhost:8080`
 
 ## 🔌 API Endpoints
 
-### 1. Create User
-Creates a new user with a balance.
+### 1. Store Balance
+Stores a user's balance privately in the system.
 
 ```bash
-POST /users
+POST /store/sum
 Content-Type: application/json
 
 {
-  "name": "Alice",
-  "balance": 150.0
+  "id": "alice123",
+  "amount": 150
 }
 ```
 
 **Response:**
-```json
-{
-  "id": 1,
-  "name": "Alice", 
-  "balance": 150.0
-}
+```
+HTTP 200 OK
 ```
 
 ### 2. Generate Proof
-Generates a zk-SNARK proof that a user has at least the threshold balance.
+Generates a zk-SNARK proof that a user has at least the required amount.
 
 ```bash
-GET /proof/1
-```
-
-**Response:**
-```json
-{
-  "user": {
-    "id": 1,
-    "name": "Alice",
-    "balance": 150.0
-  },
-  "proof": "0x..." // zk-SNARK proof data
-}
-```
-
-### 3. Verify Proof
-Verifies a zk-SNARK proof without revealing the actual balance.
-
-```bash
-POST /verify
+POST /get/proof/neededAmount
 Content-Type: application/json
 
 {
-  "proof": "0x...",
-  "threshold": 100.0,
-  "balance": 150.0
+  "id": "alice123",
+  "neededAmount": 100
 }
 ```
 
 **Response:**
 ```json
 {
-  "isValid": true
+  // zk-SNARK proof object
+  "proof": {...}
 }
+```
+
+### 3. Validate Proof
+Validates a zk-SNARK proof without revealing the actual balance.
+
+```bash
+POST /validate
+Content-Type: application/json
+
+{
+  "id": "alice123",
+  "neededAmount": 100,
+  "proof": {...}  // proof object from step 2
+}
+```
+
+**Response:**
+```
+HTTP 200 OK (proof valid)
+HTTP 401 Unauthorized (proof invalid)
 ```
 
 ## 🧪 Testing
 
-The project includes comprehensive tests for both proof generation and verification:
+To test the API manually, you can use curl:
 
 ```bash
-# Run all tests
-go test -v
+# 1. Store a balance
+curl -X POST http://localhost:8080/store/sum \
+  -H "Content-Type: application/json" \
+  -d '{"id": "alice123", "amount": 150}'
 
-# Run specific test
-go test -run TestGenerateZKProof -v
-go test -run TestVerifyZKProof -v
+# 2. Generate proof for minimum amount
+curl -X POST http://localhost:8080/get/proof/neededAmount \
+  -H "Content-Type: application/json" \
+  -d '{"id": "alice123", "neededAmount": 100}'
+
+# 3. Validate the proof (use the proof from step 2)
+curl -X POST http://localhost:8080/validate \
+  -H "Content-Type: application/json" \
+  -d '{"id": "alice123", "neededAmount": 100, "proof": {...}}'
 ```
 
 ## 📁 Project Structure
@@ -143,7 +146,6 @@ zkTest1/
 ├── main.go          # Main application with API endpoints and zk-proof logic
 ├── go.mod           # Go module definition
 ├── go.sum           # Dependency checksums
-├── zkrollup.db      # SQLite database (created automatically)
 └── README.md        # This file
 ```
 
@@ -151,29 +153,29 @@ zkTest1/
 
 ### Zero-Knowledge Proof Circuit
 
-The project defines a simple circuit in `main.go:25-35`:
+The project defines a simple circuit in `main.go:15-23`:
 
 ```go
-type Circuit struct {
-    Balance   frontend.Variable `gnark:"balance"`
-    Threshold frontend.Variable `gnark:"threshold"`
+type BalanceCircuit struct {
+    Balance      frontend.Variable `gnark:",private"`
+    NeededAmount frontend.Variable `gnark:",public"`
 }
 
-func (c *Circuit) Define(api frontend.API) error {
-    api.AssertIsLessOrEqual(c.Threshold, c.Balance)
+func (circuit *BalanceCircuit) Define(api frontend.API) error {
+    api.AssertIsLessOrEqual(circuit.NeededAmount, circuit.Balance)
     return nil
 }
 ```
 
-This circuit proves: **threshold ≤ balance** without revealing the actual balance value.
+This circuit proves: **neededAmount ≤ balance** without revealing the actual balance value.
 
 ### Proof Generation Process
 
-1. User's balance is used as a private input
-2. Threshold is a public input
-3. Circuit compiles the constraint: `threshold ≤ balance`
+1. User's balance is stored privately in memory
+2. Required amount (neededAmount) is a public input  
+3. Circuit compiles the constraint: `neededAmount ≤ balance`
 4. Groth16 generates a cryptographic proof
-5. Proof can be verified by anyone without seeing the balance
+5. Proof can be verified by anyone without seeing the actual balance
 
 ## 🎯 Use Cases
 
