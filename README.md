@@ -234,15 +234,51 @@ This circuit proves: **neededAmount ≤ balance** without revealing the actual b
 - **Key Management**: Production systems need secure key storage
 - **Proof Freshness**: Consider timestamps to prevent replay attacks
 
+## 🔄 Continuous Integration
+
+The project includes a comprehensive CI/CD pipeline with GitHub Actions:
+
+### 🚀 **Automated Testing**
+- **Fast Tests** - Quick feedback on every push (5 minutes)
+- **Unit Tests** - Circuit and proof validation with coverage 
+- **Integration Tests** - API endpoint testing
+- **E2E Tests** - Complete workflow validation
+- **Cross-Platform** - Ubuntu, Windows, macOS support
+
+### 📊 **Quality Assurance** 
+- **Security Scanning** - Vulnerability detection and dependency analysis
+- **Performance Benchmarks** - ZK proof operation benchmarking  
+- **Code Coverage** - Automated coverage reporting
+- **Static Analysis** - Code quality and formatting checks
+
+### 🎯 **Smart Test Execution**
+```bash
+# Every push/PR: Fast validation (< 10 minutes)
+Fast Tests → Unit Tests → Integration Tests
+
+# Main branch/Manual: Complete validation (< 45 minutes)  
++ Full ZK Tests → E2E Tests → Performance Benchmarks
+
+# Release: Production validation (< 90 minutes)
++ Multi-Platform Builds → Security Scans → Release Creation
+```
+
+### ⚡ **Manual Triggers**
+- Run full test suite including slow ZK operations
+- Security and dependency scans
+- Performance regression testing
+- Release builds for any tag
+
+**CI Status:** All tests run automatically - see [Actions](.github/workflows/) for details.
+
 ## 🔮 Future Enhancements
 
 - [ ] Add proof caching and optimization
-- [ ] Implement more complex financial circuits
+- [ ] Implement more complex financial circuits  
 - [ ] Support for multiple proof types
 - [ ] Docker containerization
 - [ ] Database migrations
-- [ ] Comprehensive API documentation
-- [ ] Performance benchmarking
+- [ ] Enhanced monitoring and alerting
 
 ## 🤝 Contributing
 

@@ -1,0 +1,169 @@
+name: Security & Dependencies
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Mondays at 6 AM UTC
+  push:
+    branches: [ main, master ]
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+jobs:
+  # Security vulnerability scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run govulncheck
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+        
+    - name: Run gosec Security Scanner
+      run: |
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        gosec ./...
+        
+    - name: Run nancy for dependency vulnerabilities
+      run: |
+        go install github.com/sonatypeoss/nancy@latest
+        go list -json -m all | nancy sleuth
+        
+  # Dependency analysis
+  dependency-analysis:
+    name: Dependency Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Analyze dependencies
+      run: |
+        echo "## Dependency Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "### Direct Dependencies" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        go mod graph | head -20 >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### License Check" >> $GITHUB_STEP_SUMMARY
+        go install github.com/google/go-licenses@latest
+        go-licenses report ./... >> $GITHUB_STEP_SUMMARY || echo "License check completed with warnings" >> $GITHUB_STEP_SUMMARY
+        
+  # Code quality analysis
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run staticcheck
+      run: |
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        staticcheck ./...
+        
+    - name: Run ineffassign
+      run: |
+        go install github.com/gordonklaus/ineffassign@latest
+        ineffassign ./...
+        
+    - name: Run misspell
+      run: |
+        go install github.com/client9/misspell/cmd/misspell@latest
+        misspell -error .
+        
+    - name: Check for common Go issues
+      run: |
+        # Check for potential nil pointer dereferences
+        echo "Checking for potential issues..."
+        go vet -nilfunc ./...
+        
+        # Check for unreachable code
+        go vet -unreachable ./...
+        
+        # Check for unnecessary type assertions
+        go vet -asmdecl ./...
+
+  # Performance regression detection
+  performance-check:
+    name: Performance Regression Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout base branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.base_ref }}
+        
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run baseline benchmarks
+      run: |
+        echo "Running baseline benchmarks..."
+        go test -bench=BenchmarkProof -benchmem -count=3 ./... > baseline_bench.txt
+        
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      
+    - name: Run PR benchmarks
+      run: |
+        echo "Running PR benchmarks..."
+        go test -bench=BenchmarkProof -benchmem -count=3 ./... > pr_bench.txt
+        
+    - name: Compare benchmarks
+      run: |
+        echo "## Performance Comparison" >> $GITHUB_STEP_SUMMARY
+        echo "### Baseline vs PR" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "Baseline (main branch):" >> $GITHUB_STEP_SUMMARY
+        cat baseline_bench.txt >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "PR Changes:" >> $GITHUB_STEP_SUMMARY
+        cat pr_bench.txt >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Review the benchmark results above for performance implications." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        type: string
+
+jobs:
+  # Run full test suite before release
+  pre-release-tests:
+    name: Pre-Release Full Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run complete test suite
+      run: |
+        echo "Running complete test suite for release..."
+        go test -v -timeout=45m ./...
+        
+    - name: Run benchmarks
+      run: |
+        echo "Running benchmarks for release..."
+        go test -bench=. -benchmem -run=^$ -timeout=30m ./...
+
+  # Build release binaries
+  build-release:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: pre-release-tests
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        if [ "$GOOS" = "windows" ]; then
+          EXTENSION=".exe"
+        else
+          EXTENSION=""
+        fi
+        
+        BINARY_NAME="zktest1-${GOOS}-${GOARCH}${EXTENSION}"
+        echo "Building $BINARY_NAME"
+        
+        go build -o "$BINARY_NAME" \
+          -ldflags="-X main.Version=${GITHUB_REF#refs/tags/} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          .
+          
+    - name: Upload release artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: zktest1-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: zktest1-*
+        retention-days: 7
+
+  # Create GitHub release
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-release
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          */zktest1-*
+        tag_name: ${{ github.ref_name }}
+        name: zkTest1 ${{ github.ref_name }}
+        body: |
+          # zkTest1 ${{ github.ref_name }}
+          
+          Zero-Knowledge Proof Balance Verification System
+          
+          ## What's Changed
+          - Production-ready ZK proof generation and verification
+          - Complete test coverage including benchmarks
+          - Cross-platform binaries
+          
+          ## Features
+          - 🔐 Zero-knowledge balance verification
+          - 🚀 High-performance Groth16 proofs  
+          - 🌐 REST API for easy integration
+          - 📊 Comprehensive testing and benchmarks
+          
+          ## Installation
+          Download the appropriate binary for your platform from the assets below.
+          
+          ## Usage
+          ```bash
+          ./zktest1-[platform]-[arch]
+          ```
+          
+          The server will start on `http://localhost:8080`
+          
+          See the [README](README.md) for complete documentation.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

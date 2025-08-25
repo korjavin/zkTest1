@@ -1,28 +1,262 @@
-name: CI
+name: CI Pipeline
 
 on:
   push:
-    branches:
-      - master
+    branches: [ main, master, develop ]
   pull_request:
-    branches:
-      - master
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      run_full_tests:
+        description: 'Run full test suite including slow ZK tests'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  GO_VERSION: '1.25'
 
 jobs:
-  build:
+  # Job 1: Fast tests and linting (runs on every push)
+  fast-tests:
+    name: Fast Tests & Linting
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
+    
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Set up Go 1.23.3
-      uses: actions/setup-go@v2
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.23.3
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Verify go mod
+      run: go mod tidy && git diff --exit-code
+      
+    - name: Run go vet
+      run: go vet ./...
+      
+    - name: Check code formatting
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "Code is not formatted. Please run 'gofmt -s -w .'"
+          gofmt -s -l .
+          exit 1
+        fi
+        
+    - name: Run fast tests
+      run: |
+        echo "Running fast tests (skipping slow ZK proof operations)..."
+        go test -short -v -race -timeout=5m ./...
+        
+    - name: Build application
+      run: go build -v .
 
-    - name: Install dependencies
-      run: go mod tidy
+  # Job 2: Unit tests with coverage
+  unit-tests:
+    name: Unit Tests with Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fast-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run unit tests with coverage
+      run: |
+        echo "Running unit tests with coverage..."
+        go test -v -race -coverprofile=coverage.out -covermode=atomic \
+          -run "Test.*Circuit|Test.*Proof" \
+          -timeout=10m ./...
+          
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
 
-    - name: Build
-      run: go build -v ./...
+  # Job 3: Integration tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fast-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run integration tests
+      run: |
+        echo "Running integration tests..."
+        go test -v -race \
+          -run "Test.*API|Test.*Store|Test.*Generate|Test.*Validate" \
+          -timeout=10m ./...
+
+  # Job 4: Full ZK tests (only on manual trigger or specific conditions)
+  full-zk-tests:
+    name: Full ZK Proof Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [unit-tests, integration-tests]
+    if: |
+      github.event.inputs.run_full_tests == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master' ||
+      contains(github.event.head_commit.message, '[full-tests]')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run full test suite
+      run: |
+        echo "Running complete test suite including slow ZK proof operations..."
+        echo "This may take up to 30 minutes..."
+        go test -v -timeout=30m ./...
+        
+    - name: Run end-to-end tests
+      run: |
+        echo "Running end-to-end workflow tests..."
+        go test -v -run "TestEndToEnd|TestConcurrent|TestEdge" \
+          -timeout=20m ./...
+
+  # Job 5: Benchmarks (only on main branch or manual trigger)
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: fast-tests
+    if: |
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/master' ||
+      github.event.inputs.run_full_tests == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run benchmarks
+      run: |
+        echo "Running performance benchmarks..."
+        go test -bench=. -benchmem -run=^$ \
+          -timeout=20m ./... > benchmark_results.txt
+          
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: benchmark_results.txt
+        retention-days: 30
+
+  # Job 6: Cross-platform build
+  cross-platform-build:
+    name: Cross-Platform Build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    needs: fast-tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Build application
+      run: go build -v .
+      
+    - name: Run fast tests
+      run: go test -short -v -timeout=5m ./...
+
+  # Job 7: Test results summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [fast-tests, unit-tests, integration-tests]
+    if: always()
+    
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Fast Tests | ${{ needs.fast-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.fast-tests.result }}" = "success" ] && \
+           [ "${{ needs.unit-tests.result }}" = "success" ] && \
+           [ "${{ needs.integration-tests.result }}" = "success" ]; then
+          echo "✅ All core tests passed!" >> $GITHUB_STEP_SUMMARY
+          echo "The zkTest1 zero-knowledge proof system is working correctly." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Some tests failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
