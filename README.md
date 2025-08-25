@@ -120,7 +120,49 @@ HTTP 401 Unauthorized (proof invalid)
 
 ## 🧪 Testing
 
-To test the API manually, you can use curl:
+### Automated Testing
+
+The project includes comprehensive test coverage:
+
+**Test Categories:**
+- **Unit Tests** - Circuit logic, proof generation/verification
+- **Integration Tests** - API endpoint functionality 
+- **End-to-End Tests** - Complete workflows with multiple users
+- **Benchmarks** - Performance testing for ZK operations
+
+**Running Tests:**
+```bash
+# Quick tests (recommended for development)
+make test
+# or: go test -short -v
+
+# All tests including slow ZK proof operations
+make test-all
+# or: go test -v -timeout 30m
+
+# Specific test categories
+make test-unit          # Circuit and proof tests
+make test-integration   # API endpoint tests  
+make test-e2e          # End-to-end workflows
+
+# Performance testing
+make benchmark         # All benchmarks
+make benchmark-proof   # ZK proof benchmarks only
+
+# Coverage report
+make test-coverage     # Generates coverage.html
+```
+
+**Test Files:**
+- `circuit_test.go` - Circuit compilation and logic tests
+- `proof_test.go` - ZK proof generation and verification tests
+- `api_test.go` - HTTP API integration tests
+- `e2e_test.go` - End-to-end workflow tests
+- `test_utils.go` - Testing utilities and helpers
+
+### Manual Testing
+
+Test the API manually with curl:
 
 ```bash
 # 1. Store a balance
